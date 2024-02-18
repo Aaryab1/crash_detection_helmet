@@ -1,7 +1,8 @@
 from imu import MPU6050
 from machine import I2C,Pin,reset
 from oled import Write, GFX, SSD1306_I2C
-from oled.fonts import  ubuntu_20, press_start_2p_20
+from oled.fonts import  ubuntu_20, press_start_2p_20,ubuntu_mono_20
+import utime
 import math
 import time
 
@@ -13,12 +14,13 @@ mpu = MPU6050(i2c)
 i2c2 = I2C(0,sda=Pin(16),scl =Pin(17), freq= 400000)
 dsp=SSD1306_I2C(128,64,i2c2)
 write20 = Write(dsp,ubuntu_20)
-
-
+write21 = Write(dsp,press_start_2p_20)
+write22 = Write(dsp,ubuntu_20)
 pin = Pin(28, Pin.IN, Pin.PULL_UP)
 
 
 uart = machine.UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1))
+uart1 = machine.UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9))
 
 #################################################
 ###########VARIABLE DECLARATION##################
@@ -36,11 +38,11 @@ yaw=0
 tLoop=0
 cnt=0
 crash_timer = 0
-crash_threshold = 10
+crash_threshold = 5
 crash_status = False
 
-
-
+received_data = b''
+final_counter = 1
 
 
 
@@ -51,6 +53,38 @@ while True:
     dsp.show()
     i = 10
     while not crash_status:
+        if uart1.any():
+        # Read the available bytes from UART
+            received_data += uart1.read()
+            print(received_data)
+            received_str = received_data.decode()
+            if b'INCOMING CALL FROM' in received_data:
+                # Perform another task for incoming call
+                print(received_str)
+                start_index = received_str.find('+') + 4
+                end_index = len(received_str)
+                # Adjusted to start searching from start_index
+                phone_number = received_str[start_index:end_index]
+                
+                # Perform another task with the extracted phone number
+                dsp.fill(0)
+                write22.text("CALLING.")
+                write22.text(phone_number,0,40)
+                dsp.show()
+                received_data = b''
+                
+                # Add your code here to perform the desired task
+            # Check if the received data contains a complete time string (HH:MM:SS)
+            elif b':' in received_data:
+                # Print the complete time string
+                dsp.fill(0)
+                write21.text(received_data.decode().strip(),20,20)
+                dsp.show()
+                #print(received_data.decode().strip())
+                
+
+                # Clear the received data buffer for the next set of data
+                received_data = b''
         tStart=time.ticks_ms()
     
         xGyro=mpu.gyro.x
@@ -114,4 +148,8 @@ while True:
         write20.text("Alert   Sent ",15,20)
         dsp.show()
         uart.write("Hello, world!")
+        while final_counter:
+            print("Entered")
+            uart1.write("CRASH")
+            final_counter=0
 
