@@ -16,10 +16,10 @@ dsp=SSD1306_I2C(128,64,i2c2)
 write20 = Write(dsp,ubuntu_20)
 write21 = Write(dsp,press_start_2p_20)
 write22 = Write(dsp,ubuntu_20)
-pin = Pin(28, Pin.IN, Pin.PULL_UP)
+reset_pin = Pin(28, Pin.IN, Pin.PULL_UP)
+start_pin = Pin(22, Pin.IN, Pin.PULL_UP)
 
-
-uart = machine.UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1))
+uart = machine.UART(0, baudrate=9600, tx=Pin(12), rx=Pin(13))
 uart1 = machine.UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9))
 
 #################################################
@@ -44,6 +44,8 @@ crash_status = False
 received_data = b''
 final_counter = 1
 
+start_status = False
+bluetooth_status = False
 
 
 debounce_time=0
@@ -52,7 +54,35 @@ while True:
     dsp.fill(0)
     dsp.show()
     i = 10
-    while not crash_status:
+    
+    while not start_status:
+        
+        if start_pin.value() == 0 and (time.ticks_ms() - debounce_time) > 300:
+            debounce_time = time.ticks_ms()
+            start_status = True
+            time.sleep(0.5)
+    
+        if uart1.any():
+            bluetooth_status = True
+    
+        if start_status and not bluetooth_status:
+            dsp.fill(0)
+            write22.text("Connect Phone")
+            dsp.show()
+    
+        if not start_status and not bluetooth_status:
+            dsp.fill(0)
+            write22.text("Connect Phone")
+            write22.text("Press Start", 0, 40)
+            dsp.show()
+        
+        if not start_status and bluetooth_status:
+            dsp.fill(0)
+            write22.text("Press Start", 0, 40)
+            dsp.show()
+            
+    while not crash_status and bluetooth_status and start_status:
+        uart.write("Start, world!")
         if uart1.any():
         # Read the available bytes from UART
             received_data += uart1.read()
@@ -85,6 +115,7 @@ while True:
 
                 # Clear the received data buffer for the next set of data
                 received_data = b''
+          
         tStart=time.ticks_ms()
     
         xGyro=mpu.gyro.x
@@ -128,6 +159,12 @@ while True:
             #print('RA: ',rollA,'RC: ',rollComp)'''
         tStop=time.ticks_ms()
         tLoop=(tStop-tStart)*.001
+        if start_pin.value() == 0 and (time.ticks_ms() - debounce_time) > 300:
+            debounce_time = time.ticks_ms()
+            time.sleep(0.5)
+            start_status = False
+            bluetooth_status = False
+            
     while crash_status and i!= 0:
         dsp.fill(0)
         write20.text("Crash ",0,0)
@@ -135,7 +172,7 @@ while True:
         write20.text(str(i),0,40)
         i = i - 1
         dsp.show()
-        if ((pin.value() is 0) and (time.ticks_ms()-debounce_time) > 300):
+        if ((reset_pin.value() is 0) and (time.ticks_ms()-debounce_time) > 300):
             debounce_time=time.ticks_ms()
             print("Button Pressed")
             crash_status = False
@@ -151,5 +188,6 @@ while True:
         while final_counter:
             print("Entered")
             uart1.write("CRASH")
+            uart.write("Hello, world!")
             final_counter=0
 
